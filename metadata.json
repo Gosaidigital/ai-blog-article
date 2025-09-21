@@ -1,0 +1,5 @@
+{
+  "name": "AI Blog Article Generator",
+  "description": "An application that generates plagiarism-free, SEO-friendly, and well-structured blog articles on any topic using AI. Users can specify word count, language, and tone to get customized content.",
+  "requestFramePermissions": []
+}
