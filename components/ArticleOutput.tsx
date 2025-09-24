@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Article, FAQ, AspectRatio } from '../types';
-import { generateFeaturedImage } from '../services/geminiService';
+import { generateFeaturedImage, editFeaturedImage } from '../services/geminiService';
 import { ASPECT_RATIO_OPTIONS } from '../constants';
 
 interface ArticleOutputProps {
@@ -62,6 +62,10 @@ const ArticleOutput: React.FC<ArticleOutputProps> = ({ article }) => {
   const [editablePrompt, setEditablePrompt] = useState<string>(featuredImagePrompt);
   const [imageTitle, setImageTitle] = useState<string>(seoTitle);
 
+  const [uploadedImage, setUploadedImage] = useState<{ base64: string; mimeType: string; } | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     setEditablePrompt(article.featuredImagePrompt);
     setImageTitle(article.seoTitle);
@@ -71,6 +75,7 @@ const ArticleOutput: React.FC<ArticleOutputProps> = ({ article }) => {
     setImageWithTextUrl(null);
     setIsImageLoading(false);
     setImageError(null);
+    setUploadedImage(null);
   }, [article.id, article.featuredImagePrompt, article.seoTitle]);
 
   const handleGenerateImage = async () => {
@@ -79,7 +84,9 @@ const ArticleOutput: React.FC<ArticleOutputProps> = ({ article }) => {
       setGeneratedImage(null);
       setImageWithTextUrl(null);
       try {
-          const imageUrl = await generateFeaturedImage(editablePrompt, aspectRatio);
+          const imageUrl = uploadedImage
+            ? await editFeaturedImage(editablePrompt, uploadedImage.base64, uploadedImage.mimeType)
+            : await generateFeaturedImage(editablePrompt, aspectRatio);
           setGeneratedImage(imageUrl);
       } catch (err) {
           setImageError(err instanceof Error ? err.message : 'An unknown error occurred while generating the image.');
@@ -155,6 +162,45 @@ const ArticleOutput: React.FC<ArticleOutputProps> = ({ article }) => {
   const handleRemoveTitle = () => {
     setImageWithTextUrl(null);
   };
+  
+  const handleFileChange = (file: File | null) => {
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            const base64String = dataUrl.split(',')[1];
+            setUploadedImage({
+                base64: base64String,
+                mimeType: file.type,
+            });
+        };
+        reader.readAsDataURL(file);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileChange(e.target.files[0]);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileChange(e.dataTransfer.files[0]);
+    }
+  };
 
   const formatFaqForCopy = (faqs: FAQ[]) => {
     if (!faqs || faqs.length === 0) return '';
@@ -190,15 +236,64 @@ const ArticleOutput: React.FC<ArticleOutputProps> = ({ article }) => {
             </div>
         </OutputCard>
         
-        <OutputCard title="Featured Image Prompt" textToCopy={editablePrompt}>
+        <OutputCard title="Featured Image Generation" textToCopy={editablePrompt}>
+             <label htmlFor="image-prompt-textarea" className="block text-sm font-medium text-gray-300 mb-2">
+                {uploadedImage ? 'Describe the edits for the image:' : 'Describe the image to generate:'}
+             </label>
             <textarea
+                id="image-prompt-textarea"
                 value={editablePrompt}
                 onChange={(e) => setEditablePrompt(e.target.value)}
                 rows={3}
                 className="w-full bg-gray-700 border border-gray-600 text-gray-300 font-mono rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200 resize-y mb-4"
                 aria-label="Editable featured image prompt"
             />
-            <div className="border-t border-gray-700 pt-4">
+             <div className="mt-4">
+                {uploadedImage ? (
+                    <div className="relative group">
+                        <img 
+                          src={`data:${uploadedImage.mimeType};base64,${uploadedImage.base64}`} 
+                          alt="Uploaded for editing" 
+                          className="rounded-lg w-full max-h-96 object-contain bg-gray-900/50" 
+                        />
+                        <button
+                          onClick={() => setUploadedImage(null)}
+                          className="absolute top-2 right-2 p-2 bg-black/60 hover:bg-black/80 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label="Remove image"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                    </div>
+                ) : (
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Add Base Image to Edit (Optional)
+                        </label>
+                         <div 
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            onClick={() => fileInputRef.current?.click()}
+                            className={`flex justify-center items-center w-full h-32 px-6 py-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${isDragging ? 'border-indigo-400 bg-gray-700/50' : 'border-gray-600 hover:border-gray-500'}`}
+                         >
+                            <div className="text-center pointer-events-none">
+                                <svg className="mx-auto h-10 w-10 text-gray-500" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                                <p className="mt-1 text-sm text-gray-400">
+                                <span className="font-semibold text-indigo-400">Click to upload</span> or drag and drop
+                                </p>
+                                <p className="text-xs text-gray-500">PNG, JPG, WEBP, etc.</p>
+                            </div>
+                            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*"/>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className="border-t border-gray-700 pt-4 mt-4">
                 <div className="flex flex-col sm:flex-row gap-4 items-end">
                     <div className="w-full sm:flex-1">
                         <label htmlFor="aspectRatio" className="block text-sm font-medium text-gray-300 mb-2">Aspect Ratio</label>
@@ -206,14 +301,15 @@ const ArticleOutput: React.FC<ArticleOutputProps> = ({ article }) => {
                             id="aspectRatio"
                             value={aspectRatio}
                             onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}
-                            className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200 appearance-none bg-no-repeat bg-right pr-10"
+                            className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200 appearance-none bg-no-repeat bg-right pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
                             style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.75rem center', backgroundSize: '1.5em 1.5em' }}
-                            disabled={isImageLoading}
+                            disabled={isImageLoading || !!uploadedImage}
                         >
                             {ASPECT_RATIO_OPTIONS.map((option) => (
                                 <option key={option.value} value={option.value}>{option.label}</option>
                             ))}
                         </select>
+                         {!!uploadedImage && <p className="text-xs text-gray-400 mt-1">Aspect ratio is derived from the uploaded image.</p>}
                     </div>
                     <button
                         onClick={handleGenerateImage}
@@ -233,14 +329,14 @@ const ArticleOutput: React.FC<ArticleOutputProps> = ({ article }) => {
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
                                 </svg>
-                                Generate Image
+                                {uploadedImage ? 'Edit Image' : 'Generate Image'}
                             </>
                         )}
                     </button>
                 </div>
                 
                 <div className="mt-6 text-center">
-                    {isImageLoading && <p className="text-gray-400">Please wait, image generation can take a moment...</p>}
+                    {isImageLoading && <p className="text-gray-400">Please wait, image processing can take a moment...</p>}
                     {imageError && (
                         <div className="w-full bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg">
                             {imageError}

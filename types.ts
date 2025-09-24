@@ -1,4 +1,4 @@
-export type WordCount = '300' | '500' | '1000+';
+export type WordCount = string;
 export type Language = 'English' | 'Hindi' | 'Hindi-English Mix';
 export type Tone = 'Formal' | 'Friendly' | 'Motivational' | 'Professional' | 'Human touch';
 export type AspectRatio = '1:1' | '16:9' | '9:16' | '4:3' | '3:4';

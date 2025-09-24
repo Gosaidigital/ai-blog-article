@@ -3,7 +3,10 @@ import type { SelectOption } from './types';
 export const WORD_COUNT_OPTIONS: SelectOption[] = [
   { value: '300', label: 'Approx. 300 words' },
   { value: '500', label: 'Approx. 500 words' },
-  { value: '1000+', label: '1000+ words' },
+  { value: '1000', label: 'Approx. 1000 words' },
+  { value: '2000', label: 'Approx. 2000 words' },
+  { value: '3000', label: 'Approx. 3000 words' },
+  { value: 'custom', label: 'Custom...' },
 ];
 
 export const LANGUAGE_OPTIONS: SelectOption[] = [

@@ -13,12 +13,13 @@ import DisclaimerPage from './components/DisclaimerPage';
 import PrivacyPolicyPage from './components/PrivacyPolicyPage';
 import TermsPage from './components/TermsPage';
 import { generateBlogArticle } from './services/geminiService';
-import type { WordCount, Language, Tone, Article, View } from './types';
+import type { Language, Tone, Article, View } from './types';
 import { WORD_COUNT_OPTIONS, LANGUAGE_OPTIONS, TONE_OPTIONS } from './constants';
 
 const App: React.FC = () => {
   const [topic, setTopic] = useState<string>('');
-  const [wordCount, setWordCount] = useState<WordCount>('500');
+  const [wordCount, setWordCount] = useState<string>('500');
+  const [customWordCount, setCustomWordCount] = useState<string>('1500');
   const [language, setLanguage] = useState<Language>('English');
   const [tone, setTone] = useState<Tone>('Professional');
   const [generatedArticle, setGeneratedArticle] = useState<Article | null>(null);
@@ -53,26 +54,33 @@ const App: React.FC = () => {
       return;
     }
 
+    const finalWordCount = wordCount === 'custom' ? customWordCount : wordCount;
+
+    if (wordCount === 'custom' && (!finalWordCount.trim() || isNaN(Number(finalWordCount)) || Number(finalWordCount) <= 0)) {
+        setError('Please enter a valid, positive number for the custom word count.');
+        return;
+    }
+
     setIsLoading(true);
     setError(null);
     setGeneratedArticle(null);
 
     try {
-      const articleData = await generateBlogArticle(topic, wordCount, language, tone);
+      const articleData = await generateBlogArticle(topic, finalWordCount, language, tone);
       const newArticle: Article = {
           ...articleData,
           id: Date.now().toString(),
           createdAt: new Date().toISOString(),
       };
       setGeneratedArticle(newArticle);
-      setHistory(prevHistory => [newArticle, ...prevHistory.slice(0, 49)]); // Keep history to 50 items
+      setHistory(prevHistory => [newArticle, ...prevHistory]);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'An unexpected error occurred.';
       setError(`Error: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
-  }, [topic, wordCount, language, tone]);
+  }, [topic, wordCount, customWordCount, language, tone]);
   
   const handleSelectFromHistory = useCallback((article: Article) => {
     setGeneratedArticle(article);
@@ -136,13 +144,26 @@ const App: React.FC = () => {
                   placeholder="e.g., 'Future of Digital Marketing in India'"
                 />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <SelectField
-                    id="wordCount"
-                    label="Word Count"
-                    value={wordCount}
-                    onChange={(e) => setWordCount(e.target.value as WordCount)}
-                    options={WORD_COUNT_OPTIONS}
-                  />
+                    <div>
+                        <SelectField
+                            id="wordCount"
+                            label="Word Count"
+                            value={wordCount}
+                            onChange={(e) => setWordCount(e.target.value)}
+                            options={WORD_COUNT_OPTIONS}
+                        />
+                         {wordCount === 'custom' && (
+                            <div className="mt-2">
+                                <InputField
+                                    id="customWordCount"
+                                    label="Custom Amount"
+                                    value={customWordCount}
+                                    onChange={(e) => setCustomWordCount(e.target.value)}
+                                    placeholder="e.g., 2500"
+                                />
+                            </div>
+                        )}
+                    </div>
                   <SelectField
                     id="language"
                     label="Language"
